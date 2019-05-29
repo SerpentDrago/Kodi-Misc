@@ -8,26 +8,27 @@
 """ and then update the md5 and addons.xml file """
 
 """ Recoded Fby whufclee (info@totalrevolution.tv) """
+""" Added FTP , external logging and writing non-ascii chars by FTG """
 
 import re
 import os
 import shutil
+
 import hashlib
 import zipfile
 
+############################
 ##FTP MOD##
 import sys
 import time
 import ftplib
 import os.path
 from ftplib import FTP, error_perm
-
-import logging
 ## logging
 import logging
 real_path = os.path.dirname(os.path.realpath(__file__)) + os.sep
 LOG = real_path+'log.txt'
-log_formatter=logging.Formatter('[%(asctime)-15s] %(message)s')
+log_formatter=logging.Formatter('[%(asctime)-15s] %(message)s' ,"%Y-%m-%d %H:%M:%S")
 file_handler = logging.FileHandler(LOG)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
@@ -44,28 +45,34 @@ except:
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 logger.info('\n')
+##Force CWD
+os. chdir(real_path)
 ############################
-###########
 
 os.system('cls')
 
+####################! READ THIS !###########################
+############## ENTER YOUR FTP INFO BELOW ###################
+############################################################
+#MUST HAVE / FOR FTP_DIR AND FTP_REPO_FOLDER AT THE END!####
+#preferred to have the last folders like shown in FTP paths#
+###It will create them if they are not found on Server######
+############################################################
 
-######### ENTER YOUR FTP INFO BELOW ######################
-##########################################################
-#MUST HAVE / FOR FTP_DIR AND \\ FOR LOCAL_DIR AT THE END!#
-##########################################################
-LOCAL_DIR = r'C:\\Example\\Enter\\Path\\You\\wantuploaded\\'
-FTP_DIR = '/path/of/ftp/folder/'
 
-##FTP path for public repo folder
-FTP_REPO_FOLDER = '/path/of/ftp/folder/repo'
+##FTP path for public Zips folder
+FTP_DIR = '/path/of/ftp/folder/to/zips/'
 
+##FTP path for public Repo folder
+FTP_REPO_FOLDER = '/path/of/ftp/folder/to/repo/'
+
+##FTP login info
 HOST = 'addressofftp'
 FTP_USERNAME = 'ftpusername'
 FTP_PASSWORD = 'ftppassword'
 
-##########################################################
-##########################################################
+###########################################################
+###########################################################
 
 class Generator:
 	"""
@@ -91,6 +98,9 @@ class Generator:
 		addon_folder = os.path.join('zips', addon_id)
 		if not os.path.exists(addon_folder):
 			os.makedirs(addon_folder)
+		else:
+			shutil.rmtree(addon_folder)
+			os.makedirs(addon_folder)
 
 		final_zip = os.path.join('zips', addon_id, '{0}-{1}.zip'.format(addon_id, version))
 		if not os.path.exists(final_zip):
@@ -106,12 +116,14 @@ class Generator:
 					if i in dirs:
 						try:
 							dirs.remove(i)
+							logger.info("Removed Directory {0} in {1}".format(i,addon_id))
 						except:
 							pass
 					for f in files:
 						if f.startswith(i):
 							try:
 								files.remove(f)
+								logger.info("Removed File {0} in {1}".format(i,addon_id))
 							except:
 								pass
 				
@@ -121,7 +133,7 @@ class Generator:
 					fullpath = os.path.join(root, f)
 					archive_name = os.path.join(archive_root, f)
 					zip.write(fullpath, archive_name, zipfile.ZIP_DEFLATED)
-					logger.info('[New Addon]: %s', (archive_name))
+					logger.info("Zipping {0}".format(archive_name))
 			
 			zip.close()
 			
@@ -131,7 +143,7 @@ class Generator:
 			for file in files:
 				if file in copyfiles:
 					shutil.copy(os.path.join(addon_id, file), addon_folder)
-					logger.info("[Files Copied] File %s to %s" % file,addon_folder)
+					logger.info("Copied File {0} for Addon {1}".format(file,addon_id))
 
 # Remove any instances of pyc or pyo files
 	def _remove_binaries(self):
@@ -168,7 +180,7 @@ class Generator:
 				if not os.path.isdir(addon) or addon == "zips" or addon.startswith('.'):
 					continue
 				_path = os.path.join(addon, "addon.xml")
-				xml_lines = open(_path, "r").read().splitlines()
+				xml_lines = open( _path, "r",  encoding="utf8" ).read().splitlines()
 				addon_xml = ""
 
 				# loop thru cleaning each line
@@ -186,34 +198,37 @@ class Generator:
 				self._create_zips(addon, version)
 
 			except Exception as e:
-				logger.info("[Excluding]: {0} for {1}".format(_path, e))
+				logger.error("Excluding {0} for {1}".format(_path, e))
 
 		# clean and add closing tag
 		addons_xml = addons_xml.strip() + "\n</addons>\n"
 		self._save_file(addons_xml.encode('utf-8'), file=os.path.join('zips', 'addons.xml'), decode=True)
 
 	def _generate_md5_file(self):
+		
 		try:
-			m = hashlib.md5(open(os.path.join('zips', 'addons.xml'), 'r').read().encode('utf-8')).hexdigest()
+			m= hashlib.md5(open(os.path.join('zips', 'addons.xml'), 'r',  encoding="utf8" ).read().encode('utf-8')).hexdigest()
 			self._save_file(m, file=os.path.join('zips', 'addons.xml.md5'))
 		except Exception as e:
-			logger.error("[Error]: An error occurred creating addons.xml.md5 file!\n{0}".format(e))
-
+			logger.error("An error occurred creating addons.xml.md5 file!\n{0}".format(e))
+	
 	def _save_file(self, data, file, decode=False):
 		try:
 			if decode:
-				open(file, 'w').write(data.decode('utf-8'))
+				open(file, 'w',encoding='utf-8').write(data.decode('utf-8'))
+				logger.info("File {0} written".format(file))
 			else:
-				open(file, 'w').write(data)
+				open(file, "w" ).write(data)
+				logger.info("File {0} written".format(file))
 		except Exception as e:
-			logger.error("[Error]: An error occurred saving {0} file!\n{1}".format(file, e))
+			logger.error("An error occurred saving {0} file!\n{1}".format(file, e))
 
-
-######## FTG MOD TO GIT & FTP Zips /Public Repo Folder ########################## 
-##########################################################
-####### DONT MODIFY BELOW! ###############################
+######## FTG MOD TO GIT & FTP Zips /Public Repo Folder ###################
+##########################################################################
+####################### DONT MODIFY BELOW! ###############################
 ftp_site = {'pass': FTP_PASSWORD,'user': FTP_USERNAME,'site': HOST}
 LOCAL_REPO_DIR =os.getcwd()+'\\repo\\'
+LOCAL_DIR = os.getcwd()+'\\zips\\'
 
 def get_files(root_path, recursive = True):
 	l = []
@@ -251,10 +266,10 @@ class FtpPathCache():
 				new_dir += sep + server_dir
 				if not self.ftp_exists(new_dir):
 					try:
-						logger.info('Create directory %s ...', new_dir)
+						logger.info("Create directory {0}".format(new_dir))
 						self.ftp_h.mkd(new_dir)
 					except Exception as e:
-						logger.error('ERROR Creating directory %s: %s -- %s', new_dir, str(e.args))				   
+						logger.error("ERROR Creating directory {0}: {1} -- {2} ".format(new_dir, str(e.args)))
 
 def transfer_files(list_files, ftp_site, root_folder, destination_folder):
 	pass_ = None
@@ -267,7 +282,7 @@ def transfer_files(list_files, ftp_site, root_folder, destination_folder):
 	try:
 		ftp = ftplib.FTP(ftp_site['site'], ftp_site['user'], pass_)
 	except Exception as e:
-		print('An exception occurred during the connection to %s@%s : verify the connection parameters' % (ftp_site['user'], ftp_site['site']))
+		logger.error("An exception occurred during the connection to {0}@{1} : verify the connection parameters".format(ftp_site['user'], ftp_site['site']))
 		raise e
 
 	root_folder = os.path.abspath(root_folder) if root_folder is not None else None
@@ -287,7 +302,7 @@ def transfer_files(list_files, ftp_site, root_folder, destination_folder):
 		f = os.path.abspath(f)
 		relative_path_to_root = os.path.relpath(os.path.dirname(f), root_folder) if root_folder is not None else f
 
-		print('sending file', os.path.join(relative_path_to_root, os.path.basename(f)))
+		logger.info("sending file: {0}".format( os.path.join(relative_path_to_root, os.path.basename(f))))
 
 		# remote directory
 		remote_path = os.path.join(destination_folder, relative_path_to_root if relative_path_to_root != '.' else "")
@@ -297,17 +312,17 @@ def transfer_files(list_files, ftp_site, root_folder, destination_folder):
 
 		# Change the directory if needed
 		if current_remote != remote_path:
-			try:	   
+			try:
 				ftp.cwd('/' + remote_path.rstrip('/'))
 				current_remote = remote_path
 				continue_on = True
 			except ftplib.error_perm as e:
-				logger.error('[ftp] CWD ERROR on path %s -- %s', ftp.pwd(), str(e.args))
+				logger.error("[ftp] CWD ERROR on path {0} -- {1}".format(ftp.pwd(), str(e.args)))
 				ftp.retrlines('LIST')
 				continue
 
 		ftp_command = 'STOR %s' % os.path.basename(f)
-		logger.debug('[ftp] command %s', ftp_command)
+		logger.debug('[ftp] command {0}'.format(ftp_command))
 		ftp.storbinary(ftp_command, open(f, 'rb'))
 
 	ftp.retrlines('LIST')
@@ -317,7 +332,7 @@ def ftp_upload():
 	root = os.path.expanduser(LOCAL_DIR)
 	list_of_files = get_files(root)
 	destination_folder = '/' + FTP_DIR
-	logger.info('# files to transfer: %d', len(list_of_files))
+	logger.info("# files to transfer: {0}".format(len(list_of_files)))
 
 	def remote_files(l, filename):
 		return [i for i in l if os.path.basename(i).lower() != filename]
@@ -332,29 +347,38 @@ def git_upload():
 	os.system('git commit -m "%commitmessage%"')
 	os.system('git push')
 
-####Make Public Repo Folder
-def find_repo_zip():
-	for root, dirs, files in os.walk(os.getcwd()+'\\zips\\'):
-		for file in files:
-			if file.startswith('repository') and file.endswith('.zip'):
-				logger.info('[Repo Zip]: %s' , os.path.join(root, file))
-				return os.path.join(root, file)
 
+####Make Public Repo Folder and files
 def make_repo_folder():
 	if not os.path.exists('repo'):
 		os.makedirs('repo')
-	#repo zip
-	repozip = find_repo_zip()
-	shutil.copy(repozip, 'repo')
+	else:
+		shutil.rmtree('repo')
+		os.makedirs('repo')
+	#place repo zip in repo folder
+	for root, dirs, files in os.walk(os.getcwd()+'\\zips\\'):
+		for file in files:
+			if file.startswith('repository') and file.endswith('.zip'):
+				shutil.copy(os.path.join(root, file), 'repo')
+				logger.info('[Repo Zip]: {0}'.format(file))
+	
+	#robots.txt
+	robot = open("repo\\robots.txt", "w")
+	robot.write("""User-agent: *
+Disallow: /
+""")
+	robot.close
 	#.htacess
-	htacess = open("repo\.htaccess","w")
-	htacess.write("AddHandler application/x-httpd-ea-php56 .html")
+	htacess = open("repo\\.htaccess","w")
+	htacess.write("""Options +Indexes""")
 	htacess.close
 	#index.html
-	index= open("repo\index.html","w")
+	index= open("repo\\index.php","w")
 	index.write("""
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
-
+<head>
+<meta name="robots" content="noindex,nofollow">
+</head>
 <html>
   <body>
  <h1>Index of <? echo basename(__DIR__) ?></h1>
@@ -376,7 +400,7 @@ def make_repo_folder():
      ini_set('display_errors', false);
      ini_set('log_errors', false);
      ini_set('error_log','error_log.txt');
-	 //
+     //
 
     function ConvertSize($bytes){
        if ($bytes >= 1073741824){$bytes = number_format($bytes / 1073741824, 2) . ' GB';
@@ -395,7 +419,9 @@ def make_repo_folder():
     while($entryName = readdir($myDirectory)) {
      $pathinfo = pathinfo($entryName);
      if ($pathinfo['extension'] != 'html')
-       $dirArray[] = $entryName;
+      if ($pathinfo['extension'] != 'php')
+       //if($entryName != 'add_another_file_to_skip.ext')
+        $dirArray[] = $entryName;
 }
     
     // Finds extensions of files
@@ -419,7 +445,7 @@ def make_repo_folder():
     
       // hides .   and  ..  
       $hide=".";
-	  
+
       if(substr("$dirArray[$index]", 0, 1) != $hide) {
       
       // Gets File Names
@@ -486,59 +512,61 @@ def make_repo_folder():
 def ftp_repo_files():
 	#locates all files in the repo folder and ftp them
 	root = os.path.expanduser(LOCAL_REPO_DIR)
-	logger.info('root: %s', root)
+	logger.info('root: {0}'.format(root))
 	list_of_files = get_files(root)
 	destination_folder = '/' + FTP_REPO_FOLDER
-	logger.info('Files to upload in Repo: %s', list_of_files)
+	logger.info('Files to upload in Repo: {0}'.format(list_of_files))
 	transfer_files(list_of_files, ftp_site, LOCAL_REPO_DIR, destination_folder)
+
+###Stiil needs work
+def old_repo_zip():
+	try:
+		ftp = ftplib.FTP(ftp_site['site'], ftp_site['user'], ftp_site['pass'])
+	except Exception as e:
+		logger.error("An exception occurred during the connection to {0}@{1} : verify the connection parameters".format(ftp_site['user'], ftp_site['site']))
+		raise e
+	### See if Host repo folder has a zip already
+	data = []
+	ftp.dir(FTP_REPO_FOLDER, data.append)
+	
+	for file in data:
+		vars = file.split(maxsplit = 9)
+		name = vars[8]
+		time_str = vars[5] + " " + vars[6] + " " + vars[7]
+		x = name.split(".")
+		formats=["zip"]
+		if x[-1] in formats:
+			logger.info('Zip File Found: {0} - {1}'.format(name, str(time_str)))
+###
 
 #############################################################################
 
 print((30 * '-'))
-print ("  THE Repo Generator with FTP upload & Git commit")
+print ("  THE Repo Generator with FTP upload ")
 print((30 * '-'))
-print ("  Help: Make sure you have modified the FTP items if you are FTPing ")
+print ("  Help:")
+print ("  Make sure you have modified the FTP items in the script if you are FTPing")
 print ("  Generate Repo - Takes all plugin folders and generates Kodi friendly")
 print ("                  Repositories with MD5 and addon.xml.")
 print ('  Generate Public Repo - Creates "repo" folder, places your Repository')
 print ("                  zip there & creates a index.html & .htaccess for it.")
 print ('  FTP - Uploads your files to your host')
-print ('  Git Commit - Commits your files to GitHub (must already have a git setup)')
 print((30 * '-'))
-print ("  1. Generate Repo")
-print ("  2. Generate Repo & FTP")
-print ("  3. Generate Repo & Generate Public Repo & FTP")
-print ("  4. Generate Repo & Git Commit")
+print ("  1. Generate Repo & Generate Public Repo & FTP")
 print((30 * '-'))
-print ("  5. Generate Public Repo")
+print ("  2. Generate Repo")
+print ("  3. Generate Repo & FTP")
 print((30 * '-'))
-print ("  6. Generate Public Repo & FTP")
-print((30 * '-'))
-print ("  7. FTP your Generated Repo")
-print((30 * '-'))
-print ("  8. Git Commit your Generated Repo")
-print((50 * '-'))
-print ("  9. Do almost all!  Generate Repo & FTP & Git Commit")
-print ("  10. Do it all!  Generate Repo & Generate Repo & FTP all & Git Commit all")
+print ("  4. Generate Public Repo")
+print ("  5. Generate Public Repo & FTP")
 print((30 * '-'))
 
-choice = input('  Enter [1 - 10] : ')
+
+choice = input('  Enter [1 - 5] : ')
 choice = int(choice)
 
 try:
 	if choice == 1:
-			print ("Starting the Zipping...")
-			Generator()
-			print ("Zipping Completed...")
-	elif choice == 2:
-			print ("Starting the Zipping...")
-			Generator()
-			print ("Zipping Completed...")
-			print ("Starting the FTP upload...")
-			ftp_upload()
-			print ("FTP upload Completed...")
-			print ("Process Completed...")
-	elif choice == 3:
 			print ("Starting the Zipping...")
 			Generator()
 			print ("Zipping Completed...")
@@ -550,63 +578,40 @@ try:
 			print ("Uploading the Repo Files...")
 			ftp_repo_files()
 			print ("Process Completed...")
+	elif choice == 2:
+			print ("Starting the Zipping...")
+			Generator()
+			print ("Process Completed...")
+	elif choice == 3:
+			print ("Starting the Zipping...")
+			Generator()
+			print ("Zipping Completed...")
+			print ("Starting the FTP upload...")
+			ftp_upload()
+			print ("FTP upload Completed...")
+			print ("Process Completed...")
 	elif choice == 4:
 			print ("Starting the Zipping...")
 			Generator()
 			print ("Zipping Completed...")
-			print ("Starting the Git Commit...")
-			git_upload()
-			print ("Git Commit Completed...")
-			print ("Process Completed...")
-	elif choice == 5:
-			print ("Making the Repo Folder & Files...")
+			print ("Making the Public Repo Folder & Files...")
 			make_repo_folder()
 			print ("Process Completed...")
-	elif choice == 6:
+	elif choice == 5:
+			print ("Starting the Zipping...")
+			Generator()
+			print ("Zipping Completed...")
 			print ("Making the Public Repo Folder & Files...")
 			make_repo_folder()
 			print ("Uploading the Public Repo Files...")
 			ftp_repo_files()
+			logger.info('Please remove the old zip files manually from your repo folder on your Host.')
 			print ("Process Completed...")
-	elif choice == 7:
-			print ("Starting the FTP upload...")
-			ftp_upload()
-			print ("FTP upload Completed...")
-	elif choice == 8:
-			print ("Starting the Git Commit...")
-			git_upload()
-			print ("Git Commit Completed...")
-	elif choice == 9:
-			print ("Starting the Zipping...")
-			Generator()
-			print ("Zipping Completed...")
-			print ("Starting the FTP upload...")
-			ftp_upload()
-			print ("FTP upload Completed...")
-			print ("Starting the Git Commit...")
-			git_upload()
-			print ("Git Commit Completed...")
-			print ("Process Completed...")
-	elif choice == 10:
-			print ("Starting the Zipping...")
-			Generator()
-			print ("Zipping Completed...")
-			print ("Starting the FTP upload...")
-			ftp_upload()
-			print ("FTP upload Completed...")
-			print ("Making the Repo Folder & Files...")
-			make_repo_folder()
-			print ("Uploading the Public Repo Files...")
-			ftp_repo_files()
-			print ("Upload Completed...")
-			print ("Starting the Git Commit...")
-			git_upload()
-			print ("Git Commit Completed...")
 	else:
 		print ("Invalid Choice. Try again...")
 
 except Exception as e:
-	print("[-]Error Detected." + str(e))
+	logger.error("[-]Error Detected: {0}".format(str(e)))
 
 print()
 os.system("pause")
